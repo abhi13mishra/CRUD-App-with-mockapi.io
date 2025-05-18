@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Students CRUD with MockAPI.io</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 20px auto;
+      padding: 10px;
+    }
+    h1 {
+      text-align: center;
+    }
+    form {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    form input {
+      flex: 1 1 200px;
+      padding: 8px;
+      font-size: 16px;
+    }
+    form button {
+      padding: 8px 16px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    button.edit {
+      background-color: orange;
+      border: none;
+      color: white;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    button.delete {
+      background-color: red;
+      border: none;
+      color: white;
+      padding: 5px 10px;
+      cursor: pointer;
+      margin-left: 5px;
+    }
+    #errorMsg {
+      color: red;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    #loading {
+      font-weight: bold;
+      text-align: center;
+      display: none;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Students CRUD App</h1>
+
+  <div id="loading">Loading...</div>
+  <div id="errorMsg"></div>
+
+  <form id="studentForm">
+    <input type="text" id="name" placeholder="Name" required />
+    <input type="number" id="age" placeholder="Age" required min="1" />
+    <input type="text" id="course" placeholder="Course" required />
+    <button type="submit">Add Student</button>
+    <button type="button" id="cancelEdit" style="display:none;">Cancel Edit</button>
+  </form>
+
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Age</th><th>Course</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="studentList">
+      <!-- Students will appear here -->
+    </tbody>
+  </table>
+
+<script>
+  // === Replace this with your MockAPI.io URL ===
+  const apiBase = 'https://6829fb13ab2b5004cb356af3.mockapi.io/students';
+
+  const loading = document.getElementById('loading');
+  const errorMsg = document.getElementById('errorMsg');
+  const studentForm = document.getElementById('studentForm');
+  const studentList = document.getElementById('studentList');
+  const cancelEditBtn = document.getElementById('cancelEdit');
+
+  const nameInput = document.getElementById('name');
+  const ageInput = document.getElementById('age');
+  const courseInput = document.getElementById('course');
+
+  let editId = null;
+
+  function showLoading() {
+    loading.style.display = 'block';
+  }
+
+  function hideLoading() {
+    loading.style.display = 'none';
+  }
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+  }
+
+  function clearError() {
+    errorMsg.textContent = '';
+  }
+
+  async function fetchStudents() {
+    showLoading();
+    clearError();
+    try {
+      const res = await fetch(apiBase);
+      if (!res.ok) throw new Error('Failed to fetch students');
+      const data = await res.json();
+      renderStudents(data);
+    } catch (err) {
+      showError(err.message);
+    }
+    hideLoading();
+  }
+
+  function renderStudents(students) {
+    studentList.innerHTML = '';
+    if (students.length === 0) {
+      studentList.innerHTML = `<tr><td colspan="4" style="text-align:center;">No students found.</td></tr>`;
+      return;
+    }
+    students.forEach(s => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${s.name}</td>
+        <td>${s.age}</td>
+        <td>${s.course}</td>
+        <td>
+          <button class="edit" data-id="${s.id}">Edit</button>
+          <button class="delete" data-id="${s.id}">Delete</button>
+        </td>
+      `;
+      studentList.appendChild(tr);
+    });
+
+    document.querySelectorAll('.edit').forEach(btn => {
+      btn.onclick = () => startEdit(btn.dataset.id);
+    });
+    document.querySelectorAll('.delete').forEach(btn => {
+      btn.onclick = () => {
+        if (confirm('Are you sure you want to delete this student?')) {
+          deleteStudent(btn.dataset.id);
+        }
+      };
+    });
+  }
+
+  function validateForm(name, age, course) {
+    if (!name.trim()) {
+      showError('Name cannot be empty');
+      return false;
+    }
+    if (!age || isNaN(age) || age <= 0) {
+      showError('Age must be a positive number');
+      return false;
+    }
+    if (!course.trim()) {
+      showError('Course cannot be empty');
+      return false;
+    }
+    clearError();
+    return true;
+  }
+
+  async function addStudent(student) {
+    showLoading();
+    clearError();
+    try {
+      const res = await fetch(apiBase, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(student)
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to add student: ${res.status} ${res.statusText} - ${errorText}`);
+      }
+      await fetchStudents();
+      studentForm.reset();
+    } catch (err) {
+      showError(err.message);
+    }
+    hideLoading();
+  }
+
+  async function updateStudent(id, student) {
+    showLoading();
+    clearError();
+    try {
+      const res = await fetch(`${apiBase}/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(student)
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to update student: ${res.status} ${res.statusText} - ${errorText}`);
+      }
+      await fetchStudents();
+      studentForm.reset();
+      editId = null;
+      cancelEditBtn.style.display = 'none';
+      studentForm.querySelector('button[type="submit"]').textContent = 'Add Student';
+    } catch (err) {
+      showError(err.message);
+    }
+    hideLoading();
+  }
+
+  async function deleteStudent(id) {
+    showLoading();
+    clearError();
+    try {
+      const res = await fetch(`${apiBase}/${id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Failed to delete student');
+      await fetchStudents();
+    } catch (err) {
+      showError(err.message);
+    }
+    hideLoading();
+  }
+
+  async function startEdit(id) {
+    showLoading();
+    clearError();
+    try {
+      const res = await fetch(`${apiBase}/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch student data');
+      const student = await res.json();
+      nameInput.value = student.name;
+      ageInput.value = student.age;
+      courseInput.value = student.course;
+      editId = id;
+      cancelEditBtn.style.display = 'inline-block';
+      studentForm.querySelector('button[type="submit"]').textContent = 'Update Student';
+    } catch (err) {
+      showError(err.message);
+    }
+    hideLoading();
+  }
+
+  studentForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const name = nameInput.value;
+    const age = parseInt(ageInput.value);
+    const course = courseInput.value;
+
+    if (!validateForm(name, age, course)) return;
+
+    if (editId) {
+      updateStudent(editId, { name, age, course });
+    } else {
+      addStudent({ name, age, course });
+    }
+  });
+
+  cancelEditBtn.addEventListener('click', () => {
+    studentForm.reset();
+    editId = null;
+    cancelEditBtn.style.display = 'none';
+    studentForm.querySelector('button[type="submit"]').textContent = 'Add Student';
+    clearError();
+  });
+
+  // Load students on page load
+  fetchStudents();
+</script>
+
+</body>
+</html>
